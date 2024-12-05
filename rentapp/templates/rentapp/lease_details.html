@@ -1,0 +1,59 @@
+{% extends 'rentapp/base.html' %}
+
+{% block title %}Lease Details - Rentre{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="mb-4">Lease Details</h1>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Lease Information</h5>
+                    <p class="card-text">
+                        Start Date: {{ lease.lease_start_date }}<br>
+                        End Date: {{ lease.lease_end_date }}<br>
+                        Monthly Rent: ${{ lease.monthly_rent }}<br>
+                        Status: {{ lease.status|title }}<br>
+                        {% if request.session.role == 'tenant' %}
+                            Your Confirmation: {% if lease_tenant.confirmed %}
+                                <span class="badge bg-success">Confirmed</span>
+                            {% else %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% endif %}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Tenants</h5>
+                    <ul class="list-group">
+                    {% for lt in lease.leasetenant_set.all %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ lt.tenant.user.email }}
+                            {% if lt.confirmed %}
+                                <span class="badge bg-success">Confirmed</span>
+                            {% else %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2">
+                {% if request.session.role == 'landlord' %}
+                    <a href="{% url 'edit_lease' lease.property.property_id %}" class="btn btn-warning">Edit Lease</a>
+                    <a href="{% url 'landlord_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+                {% else %}
+                    <a href="{% url 'tenant_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

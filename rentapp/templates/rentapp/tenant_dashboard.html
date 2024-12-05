@@ -1,0 +1,70 @@
+{% extends 'rentapp/base.html' %}
+
+{% block title %}Tenant Dashboard - Rentre{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">My Rentals</h1>
+
+    <div class="row">
+        {% if lease_tenants %}
+            {% for lease_tenant in lease_tenants %}
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h3 class="card-title">{{ lease_tenant.lease.property.address_line_1 }}</h3>
+                            {% if lease_tenant.lease.property.address_line_2 %}
+                                <h5 class="card-text">{{ lease_tenant.lease.property.address_line_2 }}</h5>
+                            {% endif %}
+                            <h5 class="card-text">{{ lease_tenant.lease.property.city }}, 
+                                                  {{ lease_tenant.lease.property.state }} 
+                                                  {{ lease_tenant.lease.property.zip_code }}</h5>
+                            <p class="card-text">
+                                Status: {% if lease_tenant.confirmed %}
+                                    <span class="badge bg-success">Confirmed</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </p>
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'property_details' lease_tenant.lease.property.property_id %}" 
+                                   class="btn btn-info">Property Details</a>
+                                <a href="{% url 'view_lease_details' lease_tenant.lease.lease_id %}" 
+                                   class="btn btn-primary">Lease Details</a>
+                                {% if not lease_tenant.confirmed %}
+                                    <form action="{% url 'accept_lease' lease_tenant.lease.lease_id %}" method="post">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-success w-100" 
+                                                onclick="return confirm('Are you sure you want to accept this lease?');">
+                                            Accept Lease
+                                        </button>
+                                    </form>
+                                    <form action="{% url 'decline_lease' lease_tenant.lease.lease_id %}" method="post">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger w-100" 
+                                                onclick="return confirm('Are you sure you want to decline this lease?');">
+                                            Decline Lease
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <form action="{% url 'break_lease' lease_tenant.lease.lease_id %}" method="post">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger w-100" 
+                                                onclick="return confirm('Are you sure you want to break this lease? This cannot be undone.');">
+                                            Break Lease
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="col">
+                <p>You haven't been added to any leases yet.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

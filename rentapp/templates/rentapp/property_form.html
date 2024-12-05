@@ -1,0 +1,72 @@
+{% extends 'rentapp/base.html' %}
+
+{% block title %}
+    {% if property %}Edit Property{% else %}Add Property{% endif %} - Rentre
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="text-center">{% if property %}Edit Property{% else %}Add Property{% endif %}</h2>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="address_line_1" class="form-label">Address Line 1</label>
+                        <input type="text" class="form-control" id="address_line_1" name="address_line_1" 
+                               value="{{ property.address_line_1|default:'' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="address_line_2" class="form-label">Address Line 2</label>
+                        <input type="text" class="form-control" id="address_line_2" name="address_line_2"
+                               value="{{ property.address_line_2|default:'' }}">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="city" class="form-label">City</label>
+                            <input type="text" class="form-control" id="city" name="city"
+                                   value="{{ property.city|default:'' }}" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="state" class="form-label">State</label>
+                            <input type="text" class="form-control" id="state" name="state" maxlength="2"
+                                   value="{{ property.state|default:'' }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="zip_code" class="form-label">ZIP Code</label>
+                            <input type="text" class="form-control" id="zip_code" name="zip_code"
+                                   value="{{ property.zip_code|default:'' }}" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="square_footage" class="form-label">Square Footage</label>
+                            <input type="number" class="form-control" id="square_footage" name="square_footage"
+                                   value="{{ property.square_footage|default:'' }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bedrooms" class="form-label">Bedrooms</label>
+                            <input type="number" class="form-control" id="bedrooms" name="bedrooms"
+                                   value="{{ property.bedrooms|default:'' }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="bathrooms" class="form-label">Bathrooms</label>
+                            <input type="number" class="form-control" id="bathrooms" name="bathrooms" step="0.5"
+                                   value="{{ property.bathrooms|default:'' }}" required>
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            {% if property %}Update Property{% else %}Add Property{% endif %}
+                        </button>
+                        <a href="{% url 'landlord_dashboard' %}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

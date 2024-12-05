@@ -1,0 +1,42 @@
+{% extends 'rentapp/base.html' %}
+
+{% block title %}Landlord Analytics - Rentre{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Property Analytics</h1>
+    
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Properties</h5>
+                    <p class="card-text display-4">{{ total_properties }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Active Leases</h5>
+                    <p class="card-text display-4">{{ active_leases }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Monthly Income</h5>
+                    <p class="card-text display-4">${{ monthly_income }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-grid gap-2">
+        <a href="{% url 'landlord_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

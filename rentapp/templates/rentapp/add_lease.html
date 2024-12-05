@@ -1,0 +1,57 @@
+{% extends 'rentapp/base.html' %}
+
+{% block title %}Add Lease - Rentre{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="text-center">Add Lease for {{ property.address_line_1 }}</h2>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="tenant_emails" class="form-label">Tenant Emails (comma separated)</label>
+                        <input type="text" class="form-control" id="tenant_emails" name="tenant_emails" required>
+                        <small class="form-text text-muted">Enter tenant email addresses separated by commas</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="start_date" class="form-label">Lease Start Date</label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" required 
+                               onchange="validateDates()">
+                    </div>
+                    <div class="mb-3">
+                        <label for="end_date" class="form-label">Lease End Date</label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" required 
+                               onchange="validateDates()">
+                    </div>
+                    <div class="mb-3">
+                        <label for="monthly_rent" class="form-label">Monthly Rent</label>
+                        <input type="number" class="form-control" id="monthly_rent" name="monthly_rent" min="0" step="0.01" required>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Create Lease</button>
+                        <a href="{% url 'landlord_dashboard' %}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function validateDates() {
+    const startDate = new Date(document.getElementById('start_date').value);
+    const endDate = new Date(document.getElementById('end_date').value);
+    
+    if (startDate && endDate) {
+        if (endDate <= startDate) {
+            alert('End date must be at least one day after start date');
+            document.getElementById('end_date').value = '';
+        }
+    }
+}
+</script>
+{% endblock %}

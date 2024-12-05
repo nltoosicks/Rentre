@@ -1,0 +1,37 @@
+{% extends 'rentapp/base.html' %}
+
+{% block title %}Property Details - Rentre{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="mb-4">Property Details</h1>
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h3 class="card-title">{{ property.address_line_1 }}</h3>
+                    {% if property.address_line_2 %}
+                        <h5 class="card-text">{{ property.address_line_2 }}</h5>
+                    {% endif %}
+                    <h5 class="card-text">{{ property.city }}, {{ property.state }} {{ property.zip_code }}</h5>
+                    <p class="card-text">
+                        Square Footage: {{ property.square_footage }}<br>
+                        Bedrooms: {{ property.bedrooms }}<br>
+                        Bathrooms: {{ property.bathrooms }}
+                    </p>
+                </div>
+            </div>
+            {% if request.session.role == 'landlord' %}
+                <div class="d-grid gap-2">
+                    <a href="{% url 'property_update' property.property_id %}" class="btn btn-warning">Edit Property</a>
+                    <a href="{% url 'landlord_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+                </div>
+            {% else %}
+                <div class="d-grid gap-2">
+                    <a href="{% url 'tenant_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

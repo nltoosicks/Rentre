@@ -1,0 +1,51 @@
+{% extends 'rentapp/base.html' %}
+
+{% block title %}Landlord Dashboard - Rentre{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">My Properties</h1>
+    
+    <div class="mb-4">
+        <a href="{% url 'property_create' %}" class="btn btn-primary">Add New Property</a>
+        <a href="{% url 'landlord_analytics' %}" class="btn btn-info">Analytics</a>
+    </div>
+
+    <div class="row">
+        {% if properties %}
+            {% for property in properties %}
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h3 class="card-title">{{ property.address_line_1 }}</h3>
+                            {% if property.address_line_2 %}
+                                <h5 class="card-text">{{ property.address_line_2 }}</h5>
+                            {% endif %}
+                            <h5 class="card-text">{{ property.city }}, {{ property.state }} {{ property.zip_code }}</h5>
+                            <p class="card-text">
+                                {{ property.bedrooms }} bed, {{ property.bathrooms }} bath
+                            </p>
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'property_details' property.property_id %}" class="btn btn-info">Property Details</a>
+                                {% if property.lease_set.exists %}
+                                    <a href="{% url 'view_lease_details' property.lease_set.first.lease_id %}" class="btn btn-primary">Lease Details</a>
+                                {% else %}
+                                    <a href="{% url 'add_lease_to_property' property.property_id %}" class="btn btn-success">Add Lease</a>
+                                {% endif %}
+                                <form method="post" action="{% url 'property_delete' property.property_id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger w-100" onclick="return confirm('Are you sure you want to delete this property?')">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="col">
+                <p>You haven't added any properties yet.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
