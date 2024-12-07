@@ -31,23 +31,27 @@
                 <div class="card-body">
                     <h5 class="card-title">Tenants</h5>
                     <ul class="list-group">
-                    {% for lt in lease.leasetenant_set.all %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ lt.tenant.user.email }}
-                            {% if lt.confirmed %}
-                                <span class="badge bg-success">Confirmed</span>
-                            {% else %}
-                                <span class="badge bg-warning">Pending</span>
-                            {% endif %}
-                        </li>
-                    {% endfor %}
+                    {% if lease_tenants %}
+                        {% for lt in lease_tenants %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ lt.email }}
+                                {% if lt.confirmed %}
+                                    <span class="badge bg-success">Confirmed</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    {% else %}
+                        <li class="list-group-item">No tenants assigned</li>
+                    {% endif %}
                     </ul>
                 </div>
             </div>
 
             <div class="d-grid gap-2">
                 {% if request.session.role == 'landlord' %}
-                    <a href="{% url 'edit_lease' lease.property.property_id %}" class="btn btn-warning">Edit Lease</a>
+                    <a href="{% url 'edit_lease' lease.property_id %}" class="btn btn-warning">Edit Lease</a>
                     <a href="{% url 'landlord_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
                 {% else %}
                     <a href="{% url 'tenant_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
