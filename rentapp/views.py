@@ -170,6 +170,52 @@ def property_create(request):
         
     return render(request, 'rentapp/property_form.html')
 
+def get_landlord_analytics(landlord_id):
+    """Get analytics for a landlord using prepared statements"""
+    with connection.cursor() as cursor:
+        # Get total properties
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM rentapp_property 
+            WHERE landlord_id = %s
+        """, [landlord_id])
+        total_properties = cursor.fetchone()[0]
+
+        # Get properties with active leases
+        cursor.execute("""
+            SELECT COUNT(DISTINCT p.property_id)
+            FROM rentapp_property p
+            JOIN rentapp_lease l ON p.property_id = l.property_id
+            WHERE p.landlord_id = %s AND l.status = 'active'
+        """, [landlord_id])
+        active_leases = cursor.fetchone()[0]
+
+        # Get total monthly income from active leases
+        cursor.execute("""
+            SELECT COALESCE(SUM(l.monthly_rent), 0)
+            FROM rentapp_property p
+            JOIN rentapp_lease l ON p.property_id = l.property_id
+            WHERE p.landlord_id = %s AND l.status = 'active'
+        """, [landlord_id])
+        monthly_income = cursor.fetchone()[0]
+
+    return {
+        'total_properties': total_properties,
+        'active_leases': active_leases,
+        'monthly_income': monthly_income
+    }
+
+@login_required
+def landlord_analytics(request):
+    """View analytics dashboard for landlord"""
+    if request.session.get('role') != 'landlord':
+        return HttpResponseForbidden("Landlord access only")
+        
+    user = User.objects.get(user_id=request.session['user_id'])
+    analytics = get_landlord_analytics(str(user.landlord.landlord_id))
+    
+    return render(request, 'rentapp/landlord_analytics.html', analytics)
+
 @login_required
 def property_update(request, property_id):
     """Update existing property details"""
@@ -283,29 +329,6 @@ def tenant_dashboard(request):
     })
 
 @login_required
-def view_lease_details(request, lease_id):
-    """View lease details for both landlord and tenant"""
-    user = User.objects.get(user_id=request.session['user_id'])
-    lease = get_object_or_404(Lease, lease_id=lease_id)
-    
-    if request.session.get('role') == 'landlord':
-        if lease.property.landlord != user.landlord:
-            return HttpResponseForbidden("Not your property's lease")
-        context = {'lease': lease}
-    else:  # tenant
-        lease_tenant = get_object_or_404(
-            LeaseTenant,
-            lease=lease,
-            tenant=user.tenant
-        )
-        context = {
-            'lease': lease,
-            'lease_tenant': lease_tenant
-        }
-    
-    return render(request, 'rentapp/lease_details.html', context)
-
-@login_required
 def accept_lease(request, lease_id):
     """Accept a pending lease invitation"""
     if request.session.get('role') != 'tenant':
@@ -371,62 +394,95 @@ def break_lease(request, lease_id):
     
     lease = lease_tenant.lease
     lease_tenant.delete()
-    
-    # If no tenants remain, delete the lease
-    if not lease.leasetenant_set.exists():
-        lease.delete()
-    else:
-        lease.update_status()
+    lease.update_status()
     
     messages.success(request, 'Lease broken successfully')
     return redirect('tenant_dashboard')
 
 # Shared Views
-def get_landlord_analytics(landlord_id):
-    """Get analytics for a landlord using prepared statements"""
-    with connection.cursor() as cursor:
-        # Get total properties
-        cursor.execute("""
-            SELECT COUNT(*) 
-            FROM rentapp_property 
-            WHERE landlord_id = %s
-        """, [landlord_id])
-        total_properties = cursor.fetchone()[0]
-
-        # Get properties with active leases
-        cursor.execute("""
-            SELECT COUNT(DISTINCT p.property_id)
-            FROM rentapp_property p
-            JOIN rentapp_lease l ON p.property_id = l.property_id
-            WHERE p.landlord_id = %s AND l.status = 'active'
-        """, [landlord_id])
-        active_leases = cursor.fetchone()[0]
-
-        # Get total monthly income from active leases
-        cursor.execute("""
-            SELECT COALESCE(SUM(l.monthly_rent), 0)
-            FROM rentapp_property p
-            JOIN rentapp_lease l ON p.property_id = l.property_id
-            WHERE p.landlord_id = %s AND l.status = 'active'
-        """, [landlord_id])
-        monthly_income = cursor.fetchone()[0]
-
-    return {
-        'total_properties': total_properties,
-        'active_leases': active_leases,
-        'monthly_income': monthly_income
-    }
-
 @login_required
-def landlord_analytics(request):
-    """View analytics dashboard for landlord"""
-    if request.session.get('role') != 'landlord':
-        return HttpResponseForbidden("Landlord access only")
-        
+def view_lease_details(request, lease_id):
+    """View lease details for both landlord and tenant"""
     user = User.objects.get(user_id=request.session['user_id'])
-    analytics = get_landlord_analytics(str(user.landlord.landlord_id))
     
-    return render(request, 'rentapp/landlord_analytics.html', analytics)
+    with connection.cursor() as cursor:
+        # First check authorization
+        if request.session.get('role') == 'landlord':
+            # Check if landlord owns the property this lease is for
+            cursor.execute("""
+                SELECT 1
+                FROM rentapp_lease l
+                JOIN rentapp_property p ON l.property_id = p.property_id
+                WHERE l.lease_id = %s AND p.landlord_id = %s
+            """, [lease_id, user.landlord.landlord_id])
+            if not cursor.fetchone():
+                return HttpResponseForbidden("Not your property's lease")
+        else:  # tenant
+            # Check if tenant is part of this lease
+            cursor.execute("""
+                SELECT 1
+                FROM rentapp_leasetenant lt
+                WHERE lt.lease_id = %s AND lt.tenant_id = %s
+            """, [lease_id, user.tenant.tenant_id])
+            if not cursor.fetchone():
+                return HttpResponseForbidden("Not your lease")
+
+        # Get lease details
+        cursor.execute("""
+            SELECT l.lease_id, l.lease_start_date, l.lease_end_date, 
+                   l.monthly_rent, l.status, l.property_id
+            FROM rentapp_lease l
+            WHERE l.lease_id = %s
+        """, [lease_id])
+        
+        row = cursor.fetchone()
+        if not row:
+            return HttpResponseForbidden("Lease not found")
+            
+        lease_dict = {
+            'lease_id': row[0],
+            'lease_start_date': row[1],
+            'lease_end_date': row[2],
+            'monthly_rent': row[3],
+            'status': row[4],
+            'property_id': row[5]
+        }
+        
+        # Get lease tenants
+        cursor.execute("""
+            SELECT u.email, lt.confirmed
+            FROM rentapp_leasetenant lt
+            JOIN rentapp_tenant t ON lt.tenant_id = t.tenant_id
+            JOIN rentapp_user u ON t.user_id = u.user_id
+            WHERE lt.lease_id = %s
+        """, [lease_id])
+        
+        lease_tenants = [
+            {'email': row[0], 'confirmed': row[1]}
+            for row in cursor.fetchall()
+        ]
+        
+        if request.session.get('role') == 'landlord':
+            context = {
+                'lease': lease_dict,
+                'lease_tenants': lease_tenants
+            }
+        else:  # tenant
+            # Get tenant's confirmation status
+            cursor.execute("""
+                SELECT lt.confirmed
+                FROM rentapp_leasetenant lt
+                WHERE lt.lease_id = %s AND lt.tenant_id = %s
+            """, [lease_id, user.tenant.tenant_id])
+            
+            tenant_row = cursor.fetchone()
+            context = {
+                'lease': lease_dict,
+                'lease_tenant': {'confirmed': tenant_row[0]},
+                'lease_tenants': lease_tenants
+            }
+    
+    return render(request, 'rentapp/lease_details.html', context)
 
 def property_details(request, property_id):
     """View property details (different views for landlord/tenant)"""
@@ -439,6 +495,13 @@ def property_details(request, property_id):
             return HttpResponseForbidden("Not your property")
         context = {'property': property}
     else:  # tenant
+        # Check if tenant has a lease for this property
+        lease_exists = LeaseTenant.objects.filter(
+            tenant=user.tenant,
+            lease__property=property
+        ).exists()
+        if not lease_exists:
+            return HttpResponseForbidden("You don't have a lease for this property")
         context = {'property': property}
     
     return render(request, 'rentapp/property_details.html', context)
