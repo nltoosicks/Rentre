@@ -7,9 +7,11 @@
     <div class="row justify-content-center">
         <div class="col-md-8">
             <h1 class="mb-4">Property Details</h1>
+            
             <div class="card mb-4">
                 <div class="card-body">
-                    <h3 class="card-title">{{ property.address_line_1 }}</h3>
+                    <h5 class="card-title">Property Information</h5>
+                    <h3 class="card-text">{{ property.address_line_1 }}</h3>
                     {% if property.address_line_2 %}
                         <h5 class="card-text">{{ property.address_line_2 }}</h5>
                     {% endif %}
@@ -18,6 +20,19 @@
                         Square Footage: {{ property.square_footage }}<br>
                         Bedrooms: {{ property.bedrooms }}<br>
                         Bathrooms: {{ property.bathrooms }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Landlord</h5>
+                    <p class="card-text">
+                        {% if request.session.role == 'landlord' and property.landlord.user.email == user.email %}
+                            {{ property.landlord.user.email }}
+                        {% else %}
+                            <a href="{% url 'landlord_details' property.landlord.landlord_id property.property_id %}">{{ property.landlord.user.email }}</a>
+                        {% endif %}
                     </p>
                 </div>
             </div>

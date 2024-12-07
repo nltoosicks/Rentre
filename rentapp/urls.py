@@ -28,6 +28,7 @@ urlpatterns = [
     path('lease/<int:lease_id>/', views.view_lease_details, name='view_lease_details'),
     path('profile/', views.user_profile, name='user_profile'),
     path('tenant/<int:tenant_id>/<int:lease_id>/', views.tenant_details, name='tenant_details'),
+    path('landlord/<int:landlord_id>/<int:property_id>/', views.landlord_details, name='landlord_details'),
 
     # Default landing page (redirect to login)
     path('', views.login_view, name='home'),

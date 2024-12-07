@@ -677,3 +677,53 @@ def tenant_details(request, tenant_id, lease_id):
         'tenant': tenant_dict,
         'lease_id': lease_id
     })
+
+@login_required
+def landlord_details(request, landlord_id, property_id):
+    """View landlord details with proper authorization"""
+    user = User.objects.get(user_id=request.session['user_id'])
+    role = request.session.get('role')
+
+    with connection.cursor() as cursor:
+        if role != 'tenant':
+            return HttpResponseForbidden("Only tenants can view landlord details")
+
+        # Verify tenant has a lease for a property owned by this landlord
+        cursor.execute("""
+            SELECT 1
+            FROM rentapp_leasetenant lt
+            JOIN rentapp_lease l ON lt.lease_id = l.lease_id
+            JOIN rentapp_property p ON l.property_id = p.property_id
+            WHERE lt.tenant_id = %s 
+            AND p.landlord_id = %s
+            AND p.property_id = %s
+        """, [user.tenant.tenant_id, landlord_id, property_id])
+
+        if not cursor.fetchone():
+            return HttpResponseForbidden("Not authorized to view this landlord's details")
+
+        # Get landlord details
+        cursor.execute("""
+            SELECT u.first_name, u.last_name, u.email, u.phone
+            FROM rentapp_landlord l
+            JOIN rentapp_user u ON l.user_id = u.user_id
+            WHERE l.landlord_id = %s
+        """, [landlord_id])
+
+        row = cursor.fetchone()
+        if not row:
+            return HttpResponseForbidden("Landlord not found")
+
+        landlord_dict = {
+            'user': {
+                'first_name': row[0],
+                'last_name': row[1],
+                'email': row[2],
+                'phone': row[3]
+            }
+        }
+
+    return render(request, 'rentapp/landlord_details.html', {
+        'landlord': landlord_dict,
+        'property_id': property_id
+    })
