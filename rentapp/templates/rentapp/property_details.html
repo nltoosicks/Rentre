@@ -10,7 +10,8 @@
             
             <div class="card mb-4">
                 <div class="card-body">
-                    <h3 class="card-text">{{ property.address_line_1 }}</h3>
+                    <h3 class="card-text">{{ property.property_name }}</h3>
+                    <h5 class="card-text">{{ property.address_line_1 }}</h5>
                     {% if property.address_line_2 %}
                         <h5 class="card-text">{{ property.address_line_2 }}</h5>
                     {% endif %}

@@ -156,6 +156,7 @@ def property_create(request):
         user = User.objects.get(user_id=request.session['user_id'])
         Property.objects.create(
             landlord=user.landlord,
+            property_name=request.POST['property_name'],
             address_line_1=request.POST['address_line_1'],
             address_line_2=request.POST.get('address_line_2', ''),
             city=request.POST['city'],
@@ -229,6 +230,7 @@ def property_update(request, property_id):
         return HttpResponseForbidden("Not your property")
         
     if request.method == 'POST':
+        property.property_name = request.POST['property_name']
         property.address_line_1 = request.POST['address_line_1']
         property.address_line_2 = request.POST.get('address_line_2', '')
         property.city = request.POST['city']

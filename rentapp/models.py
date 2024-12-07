@@ -28,6 +28,7 @@ class Tenant(models.Model):
 
 class Property(models.Model):
     property_id = models.AutoField(primary_key=True)
+    property_name = models.CharField(max_length=200, unique=True)
     landlord = models.ForeignKey(Landlord, on_delete=models.CASCADE)
     address_line_1 = models.CharField(max_length=200)
     address_line_2 = models.CharField(max_length=200, blank=True)

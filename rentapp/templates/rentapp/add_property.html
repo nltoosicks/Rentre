@@ -15,6 +15,12 @@
                 <form method="post">
                     {% csrf_token %}
                     <div class="mb-3">
+                        <label for="property_name" class="form-label">Property Name</label>
+                        <input type="text" class="form-control" id="property_name" name="property_name"
+                               value="{{ property.property_name|default:'' }}" required>
+                        <small class="form-text text-muted">Enter a unique name for this property</small>
+                    </div>
+                    <div class="mb-3">
                         <label for="address_line_1" class="form-label">Address Line 1</label>
                         <input type="text" class="form-control" id="address_line_1" name="address_line_1" 
                                value="{{ property.address_line_1|default:'' }}" required>
