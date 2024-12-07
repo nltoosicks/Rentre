@@ -168,7 +168,7 @@ def property_create(request):
         messages.success(request, f'Property created')
         return redirect('landlord_dashboard')
         
-    return render(request, 'rentapp/property_form.html')
+    return render(request, 'rentapp/add_property.html')
 
 def get_landlord_analytics(landlord_id):
     """Get analytics for a landlord using prepared statements"""
@@ -242,7 +242,7 @@ def property_update(request, property_id):
         messages.success(request, 'Property updated successfully')
         return redirect('landlord_dashboard')
         
-    return render(request, 'rentapp/property_form.html', {'property': property})
+    return render(request, 'rentapp/add_property.html', {'property': property})
 
 @login_required
 def property_delete(request, property_id):
