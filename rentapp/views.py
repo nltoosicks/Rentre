@@ -450,7 +450,7 @@ def view_lease_details(request, lease_id):
         
         # Get lease tenants
         cursor.execute("""
-            SELECT u.email, lt.confirmed
+            SELECT u.email, lt.confirmed, lt.tenant_id
             FROM rentapp_leasetenant lt
             JOIN rentapp_tenant t ON lt.tenant_id = t.tenant_id
             JOIN rentapp_user u ON t.user_id = u.user_id
@@ -458,7 +458,7 @@ def view_lease_details(request, lease_id):
         """, [lease_id])
         
         lease_tenants = [
-            {'email': row[0], 'confirmed': row[1]}
+            {'email': row[0], 'confirmed': row[1], 'tenant_id': row[2]}
             for row in cursor.fetchall()
         ]
         
@@ -611,4 +611,69 @@ def user_profile(request):
     return render(request, 'rentapp/user_profile.html', {
         'user': user,
         'role': role
+    })
+
+@login_required
+def tenant_details(request, tenant_id, lease_id):
+    """View tenant details with proper authorization"""
+    user = User.objects.get(user_id=request.session['user_id'])
+    role = request.session.get('role')
+
+    with connection.cursor() as cursor:
+        # First verify the requested tenant is part of the specified lease
+        cursor.execute("""
+            SELECT 1 
+            FROM rentapp_leasetenant lt
+            WHERE lt.tenant_id = %s AND lt.lease_id = %s
+        """, [tenant_id, lease_id])
+        
+        if not cursor.fetchone():
+            return HttpResponseForbidden("Invalid tenant-lease combination")
+
+        if role == 'landlord':
+            # Verify landlord owns the property this lease is for
+            cursor.execute("""
+                SELECT 1
+                FROM rentapp_lease l
+                JOIN rentapp_property p ON l.property_id = p.property_id
+                WHERE l.lease_id = %s AND p.landlord_id = %s
+            """, [lease_id, user.landlord.landlord_id])
+            
+            if not cursor.fetchone():
+                return HttpResponseForbidden("Not your property's lease")
+        else:  # tenant
+            # Verify requesting tenant is also part of this lease
+            cursor.execute("""
+                SELECT 1
+                FROM rentapp_leasetenant lt
+                WHERE lt.lease_id = %s AND lt.tenant_id = %s
+            """, [lease_id, user.tenant.tenant_id])
+            
+            if not cursor.fetchone():
+                return HttpResponseForbidden("Not your lease")
+
+        # Get tenant details
+        cursor.execute("""
+            SELECT u.first_name, u.last_name, u.email, u.phone
+            FROM rentapp_tenant t
+            JOIN rentapp_user u ON t.user_id = u.user_id
+            WHERE t.tenant_id = %s
+        """, [tenant_id])
+        
+        row = cursor.fetchone()
+        if not row:
+            return HttpResponseForbidden("Tenant not found")
+
+        tenant_dict = {
+            'user': {
+                'first_name': row[0],
+                'last_name': row[1],
+                'email': row[2],
+                'phone': row[3]
+            }
+        }
+
+    return render(request, 'rentapp/tenant_details.html', {
+        'tenant': tenant_dict,
+        'lease_id': lease_id
     })

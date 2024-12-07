@@ -1,0 +1,28 @@
+{% extends 'rentapp/base.html' %}
+
+{% block title %}Tenant Details - Rentre{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="mb-4">Tenant Details</h1>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Tenant Information</h5>
+                    <p class="card-text">
+                        Name: {{ tenant.user.first_name }} {{ tenant.user.last_name }}<br>
+                        Email: {{ tenant.user.email }}<br>
+                        Phone: {{ tenant.user.phone }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2">
+                <a href="{% url 'view_lease_details' lease_id %}" class="btn btn-secondary">Back to Lease Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
