@@ -23,7 +23,19 @@
                             {% endif %}
                             <h5 class="card-text">{{ property.city }}, {{ property.state }} {{ property.zip_code }}</h5>
                             <p class="card-text">
-                                {{ property.bedrooms }} bed, {{ property.bathrooms }} bath
+                                {{ property.bedrooms }} bed, {{ property.bathrooms }} bath<br>
+                                {% if property.lease_set.exists %}
+                                    {% with lease=property.lease_set.first %}
+                                        Lease Status: 
+                                        {% if lease.status == 'active' %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Inactive</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% else %}
+                                    Lease Status: <span class="badge bg-secondary">No Lease</span>
+                                {% endif %}
                             </p>
                             <div class="d-grid gap-2">
                                 <a href="{% url 'property_details' property.property_id %}" class="btn btn-info">Property Details</a>
