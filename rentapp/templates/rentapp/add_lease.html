@@ -10,7 +10,7 @@
                 <h2 class="text-center">Add Lease for {{ property.address_line_1 }}</h2>
             </div>
             <div class="card-body">
-                <form method="post">
+                <form method="post" onsubmit="return validateDates()">
                     {% csrf_token %}
                     <div class="mb-3">
                         <label for="tenant_emails" class="form-label">Tenant Emails (comma separated)</label>
@@ -19,13 +19,11 @@
                     </div>
                     <div class="mb-3">
                         <label for="start_date" class="form-label">Lease Start Date</label>
-                        <input type="date" class="form-control" id="start_date" name="start_date" required 
-                               onchange="validateDates()">
+                        <input type="date" class="form-control" id="start_date" name="start_date" required>
                     </div>
                     <div class="mb-3">
                         <label for="end_date" class="form-label">Lease End Date</label>
-                        <input type="date" class="form-control" id="end_date" name="end_date" required 
-                               onchange="validateDates()">
+                        <input type="date" class="form-control" id="end_date" name="end_date" required>
                     </div>
                     <div class="mb-3">
                         <label for="monthly_rent" class="form-label">Monthly Rent</label>
@@ -46,12 +44,11 @@ function validateDates() {
     const startDate = new Date(document.getElementById('start_date').value);
     const endDate = new Date(document.getElementById('end_date').value);
     
-    if (startDate && endDate) {
-        if (endDate <= startDate) {
-            alert('End date must be at least one day after start date');
-            document.getElementById('end_date').value = '';
-        }
+    if (startDate && endDate && endDate <= startDate) {
+        alert('End date must be at least one day after start date');
+        return false;
     }
+    return true;
 }
 </script>
 {% endblock %}
