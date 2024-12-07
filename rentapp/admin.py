@@ -18,15 +18,15 @@ class TenantAdmin(admin.ModelAdmin):
 
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
-    list_display = ('landlord', 'address_line_1', 'city', 'state')
-    search_fields = ('address_line_1', 'city')
+    list_display = ('property_name', 'landlord', 'address_line_1', 'city', 'state')
+    search_fields = ('property_name', 'address_line_1', 'city')
     list_filter = ('state',)
 
 @admin.register(Lease)
 class LeaseAdmin(admin.ModelAdmin):
     list_display = ('property', 'lease_start_date', 'lease_end_date', 'monthly_rent', 'status')
-    list_filter = ('status',)
-    search_fields = ('property__address_line_1',)
+    list_filter = ('status', 'property__state')
+    search_fields = ('property__property_name', 'property__address_line_1')
 
 @admin.register(LeaseTenant)
 class LeaseTenantAdmin(admin.ModelAdmin):

@@ -1,5 +1,13 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.contrib.auth import login, authenticate
+from django.contrib.auth.models import User as DjangoUser
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseForbidden
+from django.db import transaction, connection
 from functools import wraps
+from .forms import LeaseEditForm, PropertyForm, LeaseCreateForm
+from .models import User, Landlord, Tenant, Property, Lease, LeaseTenant
 
 def login_required_with_role(view_func):
     @wraps(view_func)
@@ -12,13 +20,6 @@ def login_required_with_role(view_func):
                 return redirect('home')
         return view_func(request, *args, **kwargs)
     return _wrapped_view
-from django.contrib import messages
-from django.contrib.auth import login, logout, authenticate
-from django.contrib.auth.models import User as DjangoUser
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, HttpResponseForbidden
-from django.db import transaction, connection
-from .models import User, Landlord, Tenant, Property, Lease, LeaseTenant
 
 # Authentication Views
 def login_view(request):
@@ -153,23 +154,18 @@ def property_create(request):
         return HttpResponseForbidden("Landlord access only")
         
     if request.method == 'POST':
-        user = User.objects.get(user_id=request.session['user_id'])
-        Property.objects.create(
-            landlord=user.landlord,
-            property_name=request.POST['property_name'],
-            address_line_1=request.POST['address_line_1'],
-            address_line_2=request.POST.get('address_line_2', ''),
-            city=request.POST['city'],
-            state=request.POST['state'],
-            zip_code=request.POST['zip_code'],
-            square_footage=request.POST['square_footage'],
-            bedrooms=request.POST['bedrooms'],
-            bathrooms=request.POST['bathrooms']
-        )
-        messages.success(request, f'Property created')
-        return redirect('landlord_dashboard')
+        form = PropertyForm(request.POST)
+        if form.is_valid():
+            property = form.save(commit=False)
+            user = User.objects.get(user_id=request.session['user_id'])
+            property.landlord = user.landlord
+            property.save()
+            messages.success(request, 'Property created successfully')
+            return redirect('landlord_dashboard')
+    else:
+        form = PropertyForm()
         
-    return render(request, 'rentapp/add_property.html')
+    return render(request, 'rentapp/add_property.html', {'form': form})
 
 def get_landlord_analytics(landlord_id):
     """Get analytics for a landlord using prepared statements"""
@@ -200,10 +196,48 @@ def get_landlord_analytics(landlord_id):
         """, [landlord_id])
         monthly_income = cursor.fetchone()[0]
 
+        # Get property details with lease status
+        cursor.execute("""
+            SELECT 
+                p.property_name,
+                p.city,
+                p.state,
+                p.zip_code,
+                CASE 
+                    WHEN l.status IS NULL THEN 'no lease'
+                    ELSE l.status 
+                END as lease_status,
+                l.monthly_rent
+            FROM rentapp_property p
+            LEFT JOIN (
+                SELECT property_id, status, monthly_rent
+                FROM rentapp_lease
+                WHERE status = 'active'
+                OR (status = 'inactive' AND property_id NOT IN (
+                    SELECT property_id FROM rentapp_lease WHERE status = 'active'
+                ))
+            ) l ON p.property_id = l.property_id
+            WHERE p.landlord_id = %s
+            ORDER BY p.property_name
+        """, [landlord_id])
+        
+        properties = [
+            {
+                'property_name': row[0],
+                'city': row[1],
+                'state': row[2],
+                'zip_code': row[3],
+                'lease_status': row[4],
+                'monthly_rent': row[5]
+            }
+            for row in cursor.fetchall()
+        ]
+
     return {
         'total_properties': total_properties,
         'active_leases': active_leases,
-        'monthly_income': monthly_income
+        'monthly_income': monthly_income,
+        'properties': properties
     }
 
 @login_required
@@ -214,6 +248,17 @@ def landlord_analytics(request):
         
     user = User.objects.get(user_id=request.session['user_id'])
     analytics = get_landlord_analytics(str(user.landlord.landlord_id))
+    
+    # Get unique values for filters
+    unique_cities = sorted(set(p['city'] for p in analytics['properties']))
+    unique_states = sorted(set(p['state'] for p in analytics['properties']))
+    unique_statuses = sorted(set(p['lease_status'] for p in analytics['properties']))
+    
+    analytics.update({
+        'unique_cities': unique_cities,
+        'unique_states': unique_states,
+        'unique_statuses': unique_statuses
+    })
     
     return render(request, 'rentapp/landlord_analytics.html', analytics)
 
@@ -230,21 +275,15 @@ def property_update(request, property_id):
         return HttpResponseForbidden("Not your property")
         
     if request.method == 'POST':
-        property.property_name = request.POST['property_name']
-        property.address_line_1 = request.POST['address_line_1']
-        property.address_line_2 = request.POST.get('address_line_2', '')
-        property.city = request.POST['city']
-        property.state = request.POST['state']
-        property.zip_code = request.POST['zip_code']
-        property.square_footage = request.POST['square_footage']
-        property.bedrooms = request.POST['bedrooms']
-        property.bathrooms = request.POST['bathrooms']
-        property.save()
+        form = PropertyForm(request.POST, instance=property)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Property updated successfully')
+            return redirect('landlord_dashboard')
+    else:
+        form = PropertyForm(instance=property)
         
-        messages.success(request, 'Property updated successfully')
-        return redirect('landlord_dashboard')
-        
-    return render(request, 'rentapp/add_property.html', {'property': property})
+    return render(request, 'rentapp/add_property.html', {'form': form})
 
 @login_required
 def property_delete(request, property_id):
@@ -275,46 +314,32 @@ def add_lease_to_property(request, property_id):
         return HttpResponseForbidden("Not your property")
         
     if request.method == 'POST':
-        with transaction.atomic():
-            lease = Lease.objects.create(
-                property=property,
-                lease_start_date=request.POST['start_date'],
-                lease_end_date=request.POST['end_date'],
-                monthly_rent=request.POST['monthly_rent'],
-                status='inactive'
-            )
-            
-            tenant_emails = [email.strip() for email in request.POST['tenant_emails'].split(',')]
-            all_tenants_found = True
-            tenants = []
-            
-            # First verify all tenants exist
-            for email in tenant_emails:
-                try:
-                    tenant = Tenant.objects.get(user__email=email)
-                    tenants.append(tenant)
-                except Tenant.DoesNotExist:
-                    all_tenants_found = False
-                    messages.error(request, f'No tenant account found for email: {email}')
-                    break
-            
-            if all_tenants_found:
-                # Create lease-tenant relationships
-                for tenant in tenants:
-                    LeaseTenant.objects.create(
-                        lease=lease,
-                        tenant=tenant,
-                        confirmed=False
-                    )
-                lease.update_status()
-                messages.success(request, 'Lease created successfully')
-                return redirect('landlord_dashboard')
-            else:
-                # If any tenant wasn't found, delete the lease
-                lease.delete()
-                return render(request, 'rentapp/add_lease.html', {'property': property})
-            
-    return render(request, 'rentapp/add_lease.html', {'property': property})
+        form = LeaseCreateForm(request.POST)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    lease = form.save(commit=False)
+                    lease.property = property
+                    lease.status = 'inactive'
+                    lease.save()
+                    
+                    tenant_emails = form.cleaned_data['tenant_emails']
+                    for email in tenant_emails:
+                        tenant = Tenant.objects.get(user__email=email)
+                        LeaseTenant.objects.create(
+                            lease=lease,
+                            tenant=tenant,
+                            confirmed=False
+                        )
+                    lease.update_status()
+                    messages.success(request, 'Lease created successfully')
+                    return redirect('landlord_dashboard')
+            except Exception as e:
+                messages.error(request, f'Error creating lease: {str(e)}')
+    else:
+        form = LeaseCreateForm()
+        
+    return render(request, 'rentapp/add_lease.html', {'form': form, 'property': property})
 
 # Tenant Views
 @login_required
@@ -510,7 +535,7 @@ def property_details(request, property_id):
 
 @login_required
 def edit_lease(request, property_id):
-    """Edit existing lease and tenant list"""
+    """Edit existing lease and tenant list with improved error handling and data persistence"""
     if request.session.get('role') != 'landlord':
         return HttpResponseForbidden("Landlord access only")
         
@@ -521,48 +546,46 @@ def edit_lease(request, property_id):
         return HttpResponseForbidden("Not your property")
         
     lease = get_object_or_404(Lease, property=property)
-    current_tenants = LeaseTenant.objects.filter(lease=lease)
-    current_tenant_emails = ", ".join([lt.tenant.user.email for lt in current_tenants])
     
     if request.method == 'POST':
-        with transaction.atomic():
-            # Update lease details
-            lease.lease_start_date = request.POST['start_date']
-            lease.lease_end_date = request.POST['end_date']
-            lease.monthly_rent = request.POST['monthly_rent']
-            lease.save()
-            
-            # Get new tenant email list
-            new_tenant_emails = [email.strip() for email in request.POST['tenant_emails'].split(',')]
-            
-            # Remove tenants not in new list
-            for lease_tenant in current_tenants:
-                if lease_tenant.tenant.user.email not in new_tenant_emails:
-                    lease_tenant.delete()
-            
-            # Add new tenants
-            success = False
-            for email in new_tenant_emails:
-                try:
-                    tenant = Tenant.objects.get(user__email=email)
-                    LeaseTenant.objects.get_or_create(
-                        lease=lease,
-                        tenant=tenant,
-                        defaults={'confirmed': False}
-                    )
-                    success = True
+        form = LeaseEditForm(request.POST, instance=lease)
+        
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Save lease details
+                    form.save()
+                    
+                    # Process tenants
+                    new_tenant_emails = form.cleaned_data['tenant_emails']
+                    current_tenants = lease.leasetenant_set.all()
+                    
+                    # Remove tenants not in new list
+                    for lease_tenant in current_tenants:
+                        if lease_tenant.tenant.user.email not in new_tenant_emails:
+                            lease_tenant.delete()
+                    
+                    # Add new tenants
+                    for email in new_tenant_emails:
+                        tenant = Tenant.objects.get(user__email=email)
+                        LeaseTenant.objects.get_or_create(
+                            lease=lease,
+                            tenant=tenant,
+                            defaults={'confirmed': False}
+                        )
+                    
                     lease.update_status()
-                except Tenant.DoesNotExist:
-                    messages.error(request, f'No tenant account found for email: {email}')
-            
-            if success:
-                messages.success(request, 'Lease updated successfully')
-                return redirect('landlord_dashboard')
-            
+                    messages.success(request, 'Lease updated successfully')
+                    return redirect('landlord_dashboard')
+                    
+            except Exception as e:
+                messages.error(request, f'Error updating lease: {str(e)}')
+    else:
+        form = LeaseEditForm(instance=lease)
+    
     return render(request, 'rentapp/edit_lease.html', {
         'property': property,
-        'lease': lease,
-        'current_tenant_emails': current_tenant_emails
+        'form': form
     })
 
 @login_required

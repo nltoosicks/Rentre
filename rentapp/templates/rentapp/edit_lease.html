@@ -12,33 +12,49 @@
             <div class="card-body">
                 <form method="post">
                     {% csrf_token %}
-                    <div class="mb-3">
-                        <label for="tenant_emails" class="form-label">Tenant Emails (comma separated)</label>
-                        <input type="text" class="form-control" id="tenant_emails" name="tenant_emails" 
-                               value="{{ current_tenant_emails }}" required>
-                        <small class="form-text text-muted">Enter tenant email addresses separated by commas</small>
-                    </div>
-                    <div class="mb-3">
-                        <label for="start_date" class="form-label">Lease Start Date</label>
-                        <input type="date" class="form-control" id="start_date" name="start_date" 
-                               value="{{ lease.lease_start_date|date:'Y-m-d' }}" required
-                               onchange="validateDates()">
-                    </div>
-                    <div class="mb-3">
-                        <label for="end_date" class="form-label">Lease End Date</label>
-                        <input type="date" class="form-control" id="end_date" name="end_date" 
-                               value="{{ lease.lease_end_date|date:'Y-m-d' }}" required
-                               onchange="validateDates()">
-                    </div>
-                    <div class="mb-3">
-                        <label for="monthly_rent" class="form-label">Monthly Rent</label>
-                        <input type="number" class="form-control" id="monthly_rent" name="monthly_rent" 
-                               value="{{ lease.monthly_rent }}" min="0" step="0.01" required>
-                    </div>
+                    
+                    {% if messages %}
+                        {% for message in messages %}
+                            {% if 'error' in message.tags and 'Error updating lease:' in message|safe %}
+                                <div class="alert alert-danger">
+                                    {{ message }}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">
+                                {{ field.label }}
+                            </label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <small class="form-text text-muted">{{ field.help_text }}</small>
+                            {% endif %}
+                            {% if field.errors %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ error }}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+
+                    {% if form.non_field_errors %}
+                        {% for error in form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {{ error }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary">Update Lease</button>
                     </div>
                 </form>
+
                 <div class="d-grid gap-2 mt-2">
                     <form action="{% url 'cancel_lease' property.property_id %}" method="post">
                         {% csrf_token %}
@@ -53,18 +69,4 @@
         </div>
     </div>
 </div>
-
-<script>
-function validateDates() {
-    const startDate = new Date(document.getElementById('start_date').value);
-    const endDate = new Date(document.getElementById('end_date').value);
-    
-    if (startDate && endDate) {
-        if (endDate <= startDate) {
-            alert('End date must be at least one day after start date');
-            document.getElementById('end_date').value = '';
-        }
-    }
-}
-</script>
 {% endblock %}

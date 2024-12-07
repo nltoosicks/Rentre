@@ -35,8 +35,165 @@
         </div>
     </div>
 
-    <div class="d-grid gap-2">
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Property Overview</h5>
+                    <div class="table-responsive">
+                        <div class="mb-3">
+                            <label>Filter by City:</label>
+                            <select id="cityFilter" class="form-select">
+                                <option value="">All Cities</option>
+                                {% for city in unique_cities %}
+                                    <option value="{{ city }}">{{ city }}</option>
+                                {% endfor %}
+                            </select>
+                            
+                            <label class="mt-2">Filter by State:</label>
+                            <select id="stateFilter" class="form-select">
+                                <option value="">All States</option>
+                                {% for state in unique_states %}
+                                    <option value="{{ state }}">{{ state }}</option>
+                                {% endfor %}
+                            </select>
+                            
+                            <label class="mt-2">Filter by Lease Status:</label>
+                            <select id="statusFilter" class="form-select">
+                                <option value="">All Statuses</option>
+                                {% for status in unique_statuses %}
+                                    <option value="{{ status }}">{{ status|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <table class="table table-striped table-bordered" id="propertyTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>City</th>
+                                    <th>State</th>
+                                    <th>Zip Code</th>
+                                    <th>Lease Status</th>
+                                    <th>Rent</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for property in properties %}
+                                <tr>
+                                    <td>{{ property.property_name }}</td>
+                                    <td>{{ property.city }}</td>
+                                    <td>{{ property.state }}</td>
+                                    <td>{{ property.zip_code }}</td>
+                                    <td>
+                                        {% if property.lease_status == 'active' %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% elif property.lease_status == 'inactive' %}
+                                            <span class="badge bg-warning">Inactive</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">No Lease</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{% if property.monthly_rent %}${{ property.monthly_rent }}{% else %}N/A{% endif %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-grid gap-2 mt-4">
         <a href="{% url 'landlord_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
     </div>
 </div>
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script type="text/javascript" src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+    $(document).ready(function() {
+        var table = $('#propertyTable').DataTable({
+            "pageLength": 10,
+            "order": [[0, 'asc']],  // Default sorting by Property Name
+            "columnDefs": [
+                { 
+                    "targets": 0,  // Property Name
+                    "type": "string",
+                    "orderData": [0, 1]  // Primary: Property Name, Secondary: City
+                },
+                { 
+                    "targets": 1,  // City
+                    "type": "string",
+                    "orderData": [1, 0]  // Primary: City, Secondary: Property Name
+                },
+                { 
+                    "targets": 2,  // State
+                    "type": "string",
+                    "orderData": [2, 0]  // Primary: State, Secondary: Property Name
+                },
+                { 
+                    "targets": 3,  // Zip Code
+                    "type": "num",
+                    "orderData": [3, 0]  // Primary: Zip Code, Secondary: Property Name
+                },
+                {
+                    "targets": 4,  // Lease Status
+                    "type": "string",
+                    "render": function(data, type, row) {
+                        if (type === 'sort') {
+                            // Extract text content from the badge span
+                            var text = $(data).text().trim().toLowerCase();
+                            // For proper alphabetical sorting
+                            if (text === 'active') return 'A';
+                            if (text === 'inactive') return 'B';
+                            if (text === 'no lease') return 'C';
+                            return text; // fallback
+                        }
+                        return data;
+                    },
+                    "orderData": [4, 0]  // Primary: Lease Status, Secondary: Property Name
+                },
+                { 
+                    "targets": 5,  // Monthly Rent
+                    "type": "num-fmt",
+                    "orderSequence": ["desc", "asc"], // Descending first
+                    "orderData": [5, 0],  // Primary: Monthly Rent, Secondary: Property Name
+                    "render": function(data, type, row) {
+                        if (type === 'sort') {
+                            return data === 'N/A' ? 0 : parseFloat(data.replace('$', ''));
+                        }
+                        return data;
+                    }
+                }
+            ]
+        });
+
+        // Custom filtering function
+        $.fn.dataTable.ext.search.push(
+            function(settings, data, dataIndex) {
+                var cityFilter = $('#cityFilter').val();
+                var stateFilter = $('#stateFilter').val();
+                var statusFilter = $('#statusFilter').val();
+                
+                var cityMatch = !cityFilter || data[1] === cityFilter;
+                var stateMatch = !stateFilter || data[2] === stateFilter;
+                var statusMatch = !statusFilter || data[4].toLowerCase().includes(statusFilter.toLowerCase());
+                
+                return cityMatch && stateMatch && statusMatch;
+            }
+        );
+
+        // Event listeners for filter changes
+        $('#cityFilter, #stateFilter, #statusFilter').on('change', function() {
+            table.draw();
+        });
+    });
+</script>
+
+{% endblock %}
 {% endblock %}
