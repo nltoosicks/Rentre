@@ -118,6 +118,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+STATICFILES_DIRS = [ BASE_DIR / 'static' ]
+
 # Login URL for @login_required decorator
 LOGIN_URL = 'login'
 
