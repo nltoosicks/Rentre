@@ -167,10 +167,46 @@ def property_create(request):
         
     return render(request, 'rentapp/add_property.html', {'form': form})
 
-def get_landlord_analytics(landlord_id):
-    """Get analytics for a landlord using prepared statements"""
+def get_landlord_analytics(landlord_id, city=None, state=None, status=None):
+    """Get analytics for a landlord using prepared statements with optional filters"""
+    params = [landlord_id]
+    filter_conditions = []
+    
+    if city:
+        filter_conditions.append("p.city = %s")
+        params.append(city)
+    if state:
+        filter_conditions.append("p.state = %s")
+        params.append(state)
+    if status:
+        if status == 'no lease':
+            filter_conditions.append("l.status IS NULL")
+        else:
+            filter_conditions.append("l.status = %s")
+            params.append(status)
+    
+    filter_sql = " AND " + " AND ".join(filter_conditions) if filter_conditions else ""
+    
     with connection.cursor() as cursor:
-        # Get total properties
+        # Get total properties and average rent for filtered results
+        cursor.execute(f"""
+            SELECT 
+                COUNT(*),
+                COALESCE(AVG(CASE WHEN l.monthly_rent IS NOT NULL THEN l.monthly_rent END), 0)
+            FROM rentapp_property p
+            LEFT JOIN (
+                SELECT property_id, status, monthly_rent
+                FROM rentapp_lease
+                WHERE status = 'active'
+                OR (status = 'inactive' AND property_id NOT IN (
+                    SELECT property_id FROM rentapp_lease WHERE status = 'active'
+                ))
+            ) l ON p.property_id = l.property_id
+            WHERE p.landlord_id = %s{filter_sql}
+        """, params)
+        filtered_count, avg_rent = cursor.fetchone()
+
+        # Get total properties (unfiltered)
         cursor.execute("""
             SELECT COUNT(*) 
             FROM rentapp_property 
@@ -178,7 +214,7 @@ def get_landlord_analytics(landlord_id):
         """, [landlord_id])
         total_properties = cursor.fetchone()[0]
 
-        # Get properties with active leases
+        # Get properties with active leases (unfiltered)
         cursor.execute("""
             SELECT COUNT(DISTINCT p.property_id)
             FROM rentapp_property p
@@ -187,7 +223,7 @@ def get_landlord_analytics(landlord_id):
         """, [landlord_id])
         active_leases = cursor.fetchone()[0]
 
-        # Get total monthly income from active leases
+        # Get total monthly income from active leases (unfiltered)
         cursor.execute("""
             SELECT COALESCE(SUM(l.monthly_rent), 0)
             FROM rentapp_property p
@@ -196,8 +232,8 @@ def get_landlord_analytics(landlord_id):
         """, [landlord_id])
         monthly_income = cursor.fetchone()[0]
 
-        # Get property details with lease status
-        cursor.execute("""
+        # Get property details with lease status (filtered)
+        cursor.execute(f"""
             SELECT 
                 p.property_name,
                 p.city,
@@ -217,9 +253,9 @@ def get_landlord_analytics(landlord_id):
                     SELECT property_id FROM rentapp_lease WHERE status = 'active'
                 ))
             ) l ON p.property_id = l.property_id
-            WHERE p.landlord_id = %s
+            WHERE p.landlord_id = %s{filter_sql}
             ORDER BY p.property_name
-        """, [landlord_id])
+        """, params)
         
         properties = [
             {
@@ -247,17 +283,47 @@ def landlord_analytics(request):
         return HttpResponseForbidden("Landlord access only")
         
     user = User.objects.get(user_id=request.session['user_id'])
-    analytics = get_landlord_analytics(str(user.landlord.landlord_id))
     
-    # Get unique values for filters
-    unique_cities = sorted(set(p['city'] for p in analytics['properties']))
-    unique_states = sorted(set(p['state'] for p in analytics['properties']))
-    unique_statuses = sorted(set(p['lease_status'] for p in analytics['properties']))
+    # Get filter parameters
+    city = request.GET.get('city', '')
+    state = request.GET.get('state', '')
+    status = request.GET.get('status', '')
+    
+    # Get analytics with filters
+    analytics = get_landlord_analytics(
+        str(user.landlord.landlord_id),
+        city=city if city else None,
+        state=state if state else None,
+        status=status if status else None
+    )
+    
+    # Get all possible values for filters (unfiltered)
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT DISTINCT city, state,
+                   CASE 
+                       WHEN l.status IS NULL THEN 'no lease'
+                       ELSE l.status 
+                   END as lease_status
+            FROM rentapp_property p
+            LEFT JOIN rentapp_lease l ON p.property_id = l.property_id
+            WHERE p.landlord_id = %s
+        """, [user.landlord.landlord_id])
+        
+        filter_values = cursor.fetchall()
+        unique_cities = sorted(set(row[0] for row in filter_values))
+        unique_states = sorted(set(row[1] for row in filter_values))
+        unique_statuses = sorted(set(row[2] for row in filter_values))
     
     analytics.update({
         'unique_cities': unique_cities,
         'unique_states': unique_states,
-        'unique_statuses': unique_statuses
+        'unique_statuses': unique_statuses,
+        'filtered_count': len(analytics['properties']),
+        'avg_rent': sum(p['monthly_rent'] or 0 for p in analytics['properties']) / len(analytics['properties']) if analytics['properties'] else 0,
+        'selected_city': city,
+        'selected_state': state,
+        'selected_status': status
     })
     
     return render(request, 'rentapp/landlord_analytics.html', analytics)
