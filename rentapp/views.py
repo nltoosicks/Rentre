@@ -1,3 +1,17 @@
+# This file uses both Django ORM and raw SQL with prepared statements:
+
+# ORM is used for:
+# - Simple CRUD operations (create/read/update/delete) on models
+# - Basic filtering and relationships
+# - When security and SQL injection protection are handled automatically
+# - When the queries are straightforward
+
+# Prepared Statements are used for:
+# - Complex analytics queries with dynamic filters
+# - Performance-critical operations
+# - Queries that are difficult to express in ORM
+# - When we need fine-grained control over the SQL
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import login, authenticate
@@ -149,6 +163,12 @@ def landlord_dashboard(request):
 
 @login_required
 def property_create(request):
+    """
+    Pure ORM approach for simple CRUD:
+    - Basic foreign key relationships
+    - Simple create/save operations
+    - Automatic SQL injection protection
+    """
     """Create a new property"""
     if request.session.get('role') != 'landlord':
         return HttpResponseForbidden("Landlord access only")
@@ -168,6 +188,13 @@ def property_create(request):
     return render(request, 'rentapp/add_property.html', {'form': form})
 
 def get_landlord_analytics(landlord_id, city=None, state=None, status=None):
+    """
+    Complex analytics using prepared statements for:
+    - Dynamic filtering with parameterized queries
+    - Aggregations across multiple tables
+    - Custom joins and subqueries
+    - Performance optimization for large datasets
+    """
     """Get analytics for a landlord using prepared statements with optional filters"""
     params = [landlord_id]
     filter_conditions = []
@@ -495,6 +522,12 @@ def break_lease(request, lease_id):
 # Shared Views
 @login_required
 def view_lease_details(request, lease_id):
+    """
+    Hybrid approach using both prepared statements and ORM:
+    - Prepared statements for complex authorization checks
+    - Raw SQL for efficient data retrieval across multiple tables
+    - Demonstrates when to choose each approach based on the query needs
+    """
     """View lease details for both landlord and tenant"""
     user = User.objects.get(user_id=request.session['user_id'])
     

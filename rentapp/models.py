@@ -3,7 +3,7 @@ from django.core.validators import MinValueValidator
 
 class User(models.Model):
     user_id = models.AutoField(primary_key=True)
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, db_index=True)
     password = models.CharField(max_length=128)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -29,11 +29,11 @@ class Tenant(models.Model):
 class Property(models.Model):
     property_id = models.AutoField(primary_key=True)
     property_name = models.CharField(max_length=200, unique=True)
-    landlord = models.ForeignKey(Landlord, on_delete=models.CASCADE)
+    landlord = models.ForeignKey(Landlord, on_delete=models.CASCADE, db_index=True)
     address_line_1 = models.CharField(max_length=200)
     address_line_2 = models.CharField(max_length=200, blank=True)
-    city = models.CharField(max_length=100)
-    state = models.CharField(max_length=2)
+    city = models.CharField(max_length=100, db_index=True)
+    state = models.CharField(max_length=2, db_index=True)
     zip_code = models.CharField(max_length=10)
     square_footage = models.IntegerField()
     bedrooms = models.IntegerField()
@@ -60,7 +60,7 @@ class Lease(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(0)]
     )
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='inactive')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='inactive', db_index=True)
 
     def __str__(self):
         return f"Lease for {self.property} ({self.status})"
@@ -75,9 +75,9 @@ class Lease(models.Model):
         self.save()
 
 class LeaseTenant(models.Model):
-    lease = models.ForeignKey(Lease, on_delete=models.CASCADE)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-    confirmed = models.BooleanField(default=False)
+    lease = models.ForeignKey(Lease, on_delete=models.CASCADE, db_index=True)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_index=True)
+    confirmed = models.BooleanField(default=False, db_index=True)
 
     class Meta:
         constraints = [
