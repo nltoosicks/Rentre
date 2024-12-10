@@ -376,7 +376,10 @@ def property_update(request, property_id):
     else:
         form = PropertyForm(instance=property)
         
-    return render(request, 'rentapp/add_property.html', {'form': form})
+    return render(request, 'rentapp/add_property.html', {
+        'form': form,
+        'property': property
+    })
 
 @login_required
 def property_delete(request, property_id):
