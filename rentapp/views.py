@@ -360,19 +360,25 @@ def property_update(request, property_id):
     """Update existing property details"""
     if request.session.get('role') != 'landlord':
         return HttpResponseForbidden("Landlord access only")
-        
-    property = get_object_or_404(Property, property_id=property_id)
-    user = User.objects.get(user_id=request.session['user_id'])
     
-    if property.landlord != user.landlord:
-        return HttpResponseForbidden("Not your property")
+    with transaction.atomic():
+        property = get_object_or_404(
+            Property.objects.select_for_update(),
+            property_id=property_id
+        )
+        user = User.objects.get(user_id=request.session['user_id'])
         
+        if property.landlord != user.landlord:
+            return HttpResponseForbidden("Not your property")
+            
     if request.method == 'POST':
         form = PropertyForm(request.POST, instance=property)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Property updated successfully')
-            return redirect('landlord_dashboard')
+            with transaction.atomic():
+                property = Property.objects.select_for_update().get(pk=property_id)
+                form.save()
+                messages.success(request, 'Property updated successfully')
+                return redirect('landlord_dashboard')
     else:
         form = PropertyForm(instance=property)
         
@@ -459,18 +465,22 @@ def accept_lease(request, lease_id):
         
     if request.method != 'POST':
         return HttpResponseForbidden("Invalid request method")
-        
-    user = User.objects.get(user_id=request.session['user_id'])
-    lease_tenant = get_object_or_404(
-        LeaseTenant,
-        lease__lease_id=lease_id,
-        tenant=user.tenant,
-        confirmed=False
-    )
     
-    lease_tenant.confirmed = True
-    lease_tenant.save()
-    lease_tenant.lease.update_status()
+    with transaction.atomic():
+        user = User.objects.get(user_id=request.session['user_id'])
+        lease_tenant = get_object_or_404(
+            LeaseTenant.objects.select_for_update(),
+            lease__lease_id=lease_id,
+            tenant=user.tenant,
+            confirmed=False
+        )
+        
+        # Lock the related lease to prevent concurrent status updates
+        lease = Lease.objects.select_for_update().get(pk=lease_tenant.lease.pk)
+        
+        lease_tenant.confirmed = True
+        lease_tenant.save()
+        lease.update_status()
     
     messages.success(request, 'Lease accepted successfully')
     return redirect('tenant_dashboard')
@@ -506,18 +516,20 @@ def break_lease(request, lease_id):
         
     if request.method != 'POST':
         return HttpResponseForbidden("Invalid request method")
-        
-    user = User.objects.get(user_id=request.session['user_id'])
-    lease_tenant = get_object_or_404(
-        LeaseTenant,
-        lease__lease_id=lease_id,
-        tenant=user.tenant,
-        confirmed=True
-    )
     
-    lease = lease_tenant.lease
-    lease_tenant.delete()
-    lease.update_status()
+    with transaction.atomic():
+        user = User.objects.get(user_id=request.session['user_id'])
+        lease_tenant = get_object_or_404(
+            LeaseTenant.objects.select_for_update(),
+            lease__lease_id=lease_id,
+            tenant=user.tenant,
+            confirmed=True
+        )
+        
+        # Lock the lease to prevent concurrent status updates
+        lease = Lease.objects.select_for_update().get(pk=lease_tenant.lease.pk)
+        lease_tenant.delete()
+        lease.update_status()
     
     messages.success(request, 'Lease broken successfully')
     return redirect('tenant_dashboard')
@@ -640,14 +652,21 @@ def edit_lease(request, property_id):
     """Edit existing lease and tenant list with improved error handling and data persistence"""
     if request.session.get('role') != 'landlord':
         return HttpResponseForbidden("Landlord access only")
-        
-    property = get_object_or_404(Property, property_id=property_id)
-    user = User.objects.get(user_id=request.session['user_id'])
     
-    if property.landlord != user.landlord:
-        return HttpResponseForbidden("Not your property")
+    with transaction.atomic():
+        property = get_object_or_404(
+            Property.objects.select_for_update(),
+            property_id=property_id
+        )
+        user = User.objects.get(user_id=request.session['user_id'])
         
-    lease = get_object_or_404(Lease, property=property)
+        if property.landlord != user.landlord:
+            return HttpResponseForbidden("Not your property")
+            
+        lease = get_object_or_404(
+            Lease.objects.select_for_update(),
+            property=property
+        )
     
     if request.method == 'POST':
         form = LeaseEditForm(request.POST, instance=lease)
@@ -696,22 +715,26 @@ def cancel_lease(request, property_id):
     if request.session.get('role') != 'landlord':
         return HttpResponseForbidden("Landlord access only")
         
-    property = get_object_or_404(Property, property_id=property_id)
-    user = User.objects.get(user_id=request.session['user_id'])
-    
-    if property.landlord != user.landlord:
-        return HttpResponseForbidden("Not your property")
-        
     if request.method == 'POST':
-        try:
-            lease = Lease.objects.get(property=property)
-            # Delete all associated lease tenants first
-            LeaseTenant.objects.filter(lease=lease).delete()
-            # Then delete the lease
-            lease.delete()
-            messages.success(request, 'Lease cancelled successfully')
-        except Lease.DoesNotExist:
-            messages.error(request, 'No lease found for this property')
+        with transaction.atomic():
+            property = get_object_or_404(
+                Property.objects.select_for_update(),
+                property_id=property_id
+            )
+            user = User.objects.get(user_id=request.session['user_id'])
+            
+            if property.landlord != user.landlord:
+                return HttpResponseForbidden("Not your property")
+            
+            try:
+                lease = Lease.objects.select_for_update().get(property=property)
+                # Delete all associated lease tenants first
+                LeaseTenant.objects.filter(lease=lease).delete()
+                # Then delete the lease
+                lease.delete()
+                messages.success(request, 'Lease cancelled successfully')
+            except Lease.DoesNotExist:
+                messages.error(request, 'No lease found for this property')
         return redirect('landlord_dashboard')
     
     return HttpResponseForbidden("Invalid request method")
