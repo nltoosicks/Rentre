@@ -347,7 +347,7 @@ def landlord_analytics(request):
         'unique_states': unique_states,
         'unique_statuses': unique_statuses,
         'filtered_count': len(analytics['properties']),
-        'avg_rent': sum(p['monthly_rent'] or 0 for p in analytics['properties']) / len(analytics['properties']) if analytics['properties'] else 0,
+        'avg_rent': sum((p['monthly_rent'] if p['lease_status'] == 'active' else 0) for p in analytics['properties']) / len(analytics['properties']) if analytics['properties'] else 0,
         'selected_city': city,
         'selected_state': state,
         'selected_status': status
